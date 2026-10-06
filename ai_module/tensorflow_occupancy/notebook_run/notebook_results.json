@@ -1,0 +1,61 @@
+{
+  "features": [
+    "pir_1_ratio",
+    "pir_2_ratio",
+    "pir_any_ratio",
+    "pir_both_ratio",
+    "pir_1_rising_edges",
+    "pir_2_rising_edges"
+  ],
+  "architecture": "6-16-8-3",
+  "epochs_completed": 49,
+  "float_test_metrics": {
+    "accuracy": 0.886719,
+    "macro_f1": 0.874678,
+    "per_class": {
+      "EMPTY": {
+        "precision": 0.971429,
+        "recall": 1.0,
+        "f1": 0.985507,
+        "support": 102
+      },
+      "LOW": {
+        "precision": 0.686747,
+        "recall": 1.0,
+        "f1": 0.814286,
+        "support": 57
+      },
+      "HIGH": {
+        "precision": 1.0,
+        "recall": 0.701031,
+        "f1": 0.824242,
+        "support": 97
+      }
+    }
+  },
+  "int8_test_metrics": {
+    "accuracy": 0.886719,
+    "macro_f1": 0.874678,
+    "per_class": {
+      "EMPTY": {
+        "precision": 0.971429,
+        "recall": 1.0,
+        "f1": 0.985507,
+        "support": 102
+      },
+      "LOW": {
+        "precision": 0.686747,
+        "recall": 1.0,
+        "f1": 0.814286,
+        "support": 57
+      },
+      "HIGH": {
+        "precision": 1.0,
+        "recall": 0.701031,
+        "f1": 0.824242,
+        "support": 97
+      }
+    }
+  },
+  "int8_model_size_bytes": 3616
+}

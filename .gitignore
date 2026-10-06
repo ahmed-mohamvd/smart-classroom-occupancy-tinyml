@@ -1,0 +1,34 @@
+# Python environments and caches
+.venv/
+.venv-tf/
+**/__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+**/.jupyter/
+# Reproducible Jupyter HTML exports
+ai_module/tensorflow_occupancy/training_walkthrough_results*.html
+
+# Node dependencies and local tooling
+node_modules/
+.codex-finalizer/
+
+# Temporary files and archived experiments
+tmp/
+archive_unused_2026-09-17/
+
+# STM32CubeIDE/Eclipse workspace and build output
+.metadata/
+RemoteSystemsTempFiles/
+**/Debug/
+**/Release/
+**/*.o
+**/*.d
+**/*.su
+**/*.cyclo
+**/*.elf
+**/*.map
+**/*.list
+
+# Operating-system files
+Thumbs.db
+.DS_Store

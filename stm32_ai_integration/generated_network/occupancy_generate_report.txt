@@ -1,18 +1,18 @@
 ST Edge AI Core v2.2.0-20266 2adc00962
 Created date          : 2026-09-16 11:09:01
-Parameters            : generate --target stm32 --type tflite --name occupancy --model ai_module\tensorflow_occupancy\artifacts_pir_v2\occupancy_model_int8.tflite --workspace stm32_ai_integration\generate_workspace --output stm32_ai_integration\generated_network --optimization balanced --c-api legacy --verbosity 1
+Parameters            : generate --target stm32 --type tflite --name occupancy --model C:\Users\ahmed\Downloads\VeCAD project AHMED\ai_module\tensorflow_occupancy\artifacts_pir_v2\occupancy_model_int8.tflite --workspace C:\Users\ahmed\Downloads\VeCAD project AHMED\stm32_ai_integration\generate_workspace --output C:\Users\ahmed\Downloads\VeCAD project AHMED\stm32_ai_integration\generated_network --optimization balanced --c-api legacy --verbosity 1
 
 Exec/report summary (generate)
 --------------------------------------------------------------------------------------------------------------------------------------------------
-model file         :   ai_module\tensorflow_occupancy\artifacts_pir_v2\occupancy_model_int8.tflite   
+model file         :   C:\Users\ahmed\Downloads\VeCAD project AHMED\ai_module\tensorflow_occupancy\artifacts_pir_v2\occupancy_model_int8.tflite   
 type               :   tflite                                                                                                                     
 c_name             :   occupancy                                                                                                                  
 compression        :   lossless                                                                                                                   
 options            :   allocate-inputs, allocate-outputs                                                                                          
 optimization       :   balanced                                                                                                                   
 target/series      :   stm32                                                                                                                      
-workspace dir      :   stm32_ai_integration\generate_workspace                                       
-output dir         :   stm32_ai_integration\generated_network                                        
+workspace dir      :   C:\Users\ahmed\Downloads\VeCAD project AHMED\stm32_ai_integration\generate_workspace                                       
+output dir         :   C:\Users\ahmed\Downloads\VeCAD project AHMED\stm32_ai_integration\generated_network                                        
 model_fmt          :   ss/sa per channel                                                                                                          
 model_name         :   occupancy_model_int8                                                                                                       
 model_hash         :   0xb8b8307be2e3df162b34fb2da028907d                                                                                         
@@ -151,10 +151,10 @@ macc=320 weights=356 act=1,028 ram_io=0
 
 Generated files (7)
 ------------------------------------------------------------------------------------------------------------- 
-stm32_ai_integration\generated_network\occupancy_data_params.h   
-stm32_ai_integration\generated_network\occupancy_data_params.c   
-stm32_ai_integration\generated_network\occupancy_data.h          
-stm32_ai_integration\generated_network\occupancy_data.c          
-stm32_ai_integration\generated_network\occupancy_config.h        
-stm32_ai_integration\generated_network\occupancy.h               
-stm32_ai_integration\generated_network\occupancy.c               
+C:\Users\ahmed\Downloads\VeCAD project AHMED\stm32_ai_integration\generated_network\occupancy_data_params.h   
+C:\Users\ahmed\Downloads\VeCAD project AHMED\stm32_ai_integration\generated_network\occupancy_data_params.c   
+C:\Users\ahmed\Downloads\VeCAD project AHMED\stm32_ai_integration\generated_network\occupancy_data.h          
+C:\Users\ahmed\Downloads\VeCAD project AHMED\stm32_ai_integration\generated_network\occupancy_data.c          
+C:\Users\ahmed\Downloads\VeCAD project AHMED\stm32_ai_integration\generated_network\occupancy_config.h        
+C:\Users\ahmed\Downloads\VeCAD project AHMED\stm32_ai_integration\generated_network\occupancy.h               
+C:\Users\ahmed\Downloads\VeCAD project AHMED\stm32_ai_integration\generated_network\occupancy.c               

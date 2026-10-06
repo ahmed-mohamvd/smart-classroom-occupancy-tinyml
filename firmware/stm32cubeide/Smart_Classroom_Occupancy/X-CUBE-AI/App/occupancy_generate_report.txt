@@ -1,0 +1,191 @@
+ST Edge AI Core v2.2.0-20266 2adc00962
+Created date          : 2026-09-16 11:25:46
+Parameters            : generate --target stm32l4 --name occupancy -m C:/Users/ahmed/Downloads/VeCAD project AHMED/ai_module/tensorflow_occupancy/artifacts_pir_v2/occupancy_model_int8.tflite --compression none --verbosity 1 --workspace C:/Users/ahmed/AppData/Local/Temp/mxAI_workspace192007987307001975542629519837776 --output C:/Users/ahmed/.stm32cubemx/network_output
+
+Exec/report summary (generate)
+--------------------------------------------------------------------------------------------------------------------------------------------------
+model file         :   C:\Users\ahmed\Downloads\VeCAD project AHMED\ai_module\tensorflow_occupancy\artifacts_pir_v2\occupancy_model_int8.tflite   
+type               :   tflite                                                                                                                     
+c_name             :   occupancy                                                                                                                  
+compression        :   none                                                                                                                       
+options            :   allocate-inputs, allocate-outputs                                                                                          
+optimization       :   balanced                                                                                                                   
+target/series      :   stm32l4                                                                                                                    
+workspace dir      :   C:\Users\ahmed\AppData\Local\Temp\mxAI_workspace192007987307001975542629519837776                                          
+output dir         :   C:\Users\ahmed\.stm32cubemx\network_output                                                                                 
+model_fmt          :   ss/sa per channel                                                                                                          
+model_name         :   occupancy_model_int8                                                                                                       
+model_hash         :   0xb8b8307be2e3df162b34fb2da028907d                                                                                         
+params #           :   275 items (356 B)                                                                                                          
+--------------------------------------------------------------------------------------------------------------------------------------------------
+input 1/1          :   'serving_default_no.._features0', int8(1x6), 6 Bytes, QLinear(0.013972778,-27,int8), activations                           
+output 1/1         :   'nl_3', int8(1x3), 3 Bytes, QLinear(0.003906250,-128,int8), activations                                                    
+macc               :   320                                                                                                                        
+weights (ro)       :   356 B (356 B) (1 segment) / -744(-67.6%) vs float model                                                                    
+activations (rw)   :   1,028 B (1.00 KiB) (1 segment) *                                                                                           
+ram (total)        :   1,028 B (1.00 KiB) = 1,028 + 0 + 0                                                                                         
+--------------------------------------------------------------------------------------------------------------------------------------------------
+(*) 'input'/'output' buffers are allocated in the activations buffer
+
+Model name - occupancy_model_int8
+------ ------------------------------------------------ ------------ ------------ ------ -------------------------------- --- --------------- --------------- --------------------- 
+m_id   layer (type,original)                            oshape       param/size     macc                     connected to   | c_size          c_macc          c_type                
+------ ------------------------------------------------ ------------ ------------ ------ -------------------------------- --- --------------- --------------- --------------------- 
+0      serving_default_no.._features0 (Input, )         [b:1,c:6]                                                           | +160(+100.0%)   +112(+100.0%)   Dense_[0]             
+       occupancy_mlp_1_de..6_1_MatMul (Placeholder, )   [b:16,c:6]   96/96                                                  | -96(-100.0%)                    
+       occupancy_mlp_1_de.._1_BiasAdd (Placeholder, )   [b:16]       16/64                                                  | -64(-100.0%)                    
+       gemm_0 (Gemm, FULLY_CONNECTED)                   [b:1,c:16]                   112   serving_default_no.._features0   |                 -112(-100.0%)   
+                                                                                           occupancy_mlp_1_de..6_1_MatMul   | 
+                                                                                           occupancy_mlp_1_de.._1_BiasAdd   | 
+       nl_0_nl (Nonlinearity, FULLY_CONNECTED)          [b:1,c:16]                    16                           gemm_0   |                 -16(-100.0%)    
+------ ------------------------------------------------ ------------ ------------ ------ -------------------------------- --- --------------- --------------- --------------------- 
+1      occupancy_mlp_1_de..8_1_MatMul (Placeholder, )   [b:8,c:16]   128/128                                                | +32(+25.0%)     +136(+100.0%)   Dense_[1]             
+       occupancy_mlp_1_de.._1_BiasAdd (Placeholder, )   [b:8]        8/32                                                   | -32(-100.0%)                    
+       gemm_1 (Gemm, FULLY_CONNECTED)                   [b:1,c:8]                    136                          nl_0_nl   |                 -136(-100.0%)   
+                                                                                           occupancy_mlp_1_de..8_1_MatMul   | 
+                                                                                           occupancy_mlp_1_de.._1_BiasAdd   | 
+       nl_1_nl (Nonlinearity, FULLY_CONNECTED)          [b:1,c:8]                      8                           gemm_1   |                 -8(-100.0%)     
+------ ------------------------------------------------ ------------ ------------ ------ -------------------------------- --- --------------- --------------- --------------------- 
+2      occupancy_mlp_1_oc..y_1_MatMul (Placeholder, )   [b:3,c:8]    24/24                                                  | +12(+50.0%)     +27(+100.0%)    Dense_[2]             
+       occupancy_mlp_1_oc.._1_BiasAdd (Placeholder, )   [b:3]        3/12                                                   | -12(-100.0%)                    
+       gemm_2 (Gemm, FULLY_CONNECTED)                   [b:1,c:3]                     27                          nl_1_nl   |                 -27(-100.0%)    
+                                                                                           occupancy_mlp_1_oc..y_1_MatMul   | 
+                                                                                           occupancy_mlp_1_oc.._1_BiasAdd   | 
+------ ------------------------------------------------ ------------ ------------ ------ -------------------------------- --- --------------- --------------- --------------------- 
+3      nl_3 (Nonlinearity, SOFTMAX)                     [b:1,c:3]                     45                           gemm_2   |                                 Nonlinearity_[o][3]   
+------ ------------------------------------------------ ------------ ------------ ------ -------------------------------- --- --------------- --------------- --------------------- 
+model/c-model: macc=344/320 -24(-7.0%) weights=356/356  activations=--/1,028 io=--/0
+
+
+
+Generated C-graph summary
+------------------------------------------------------------------------------------------------------------------------
+model name            : occupancy_model_int8
+c-name                : occupancy
+c-node #              : 4
+c-array #             : 15
+activations size      : 1028 (1 segment)
+weights size          : 356 (1 segment)
+macc                  : 320
+inputs                : ['serving_default_normalized_sensor_features0_output']
+outputs               : ['nl_3_output']
+
+C-Arrays (15)
+------ ---------------------------------------------------- ----------- ------------------------- ----------- --------- 
+c_id   name (*_array)                                       item/size   domain/mem-pool           c-type      comment   
+------ ---------------------------------------------------- ----------- ------------------------- ----------- --------- 
+0      gemm_0_bias                                          16/64       weights/weights           const s32             
+1      gemm_0_output                                        16/16       activations/**default**   s8                    
+2      gemm_0_scratch0                                      86/172      activations/**default**   s16                   
+3      gemm_0_weights                                       96/96       weights/weights           const s8              
+4      gemm_1_bias                                          8/32        weights/weights           const s32             
+5      gemm_1_output                                        8/8         activations/**default**   s8                    
+6      gemm_1_scratch0                                      56/112      activations/**default**   s16                   
+7      gemm_1_weights                                       128/128     weights/weights           const s8              
+8      gemm_2_bias                                          3/12        weights/weights           const s32             
+9      gemm_2_output                                        3/3         activations/**default**   s8                    
+10     gemm_2_scratch0                                      23/46       activations/**default**   s16                   
+11     gemm_2_weights                                       24/24       weights/weights           const s8              
+12     nl_3_output                                          3/3         activations/**default**   s8          /output   
+13     nl_3_scratch0                                        256/1024    activations/**default**   s32                   
+14     serving_default_normalized_sensor_features0_output   6/6         activations/**default**   s8          /input    
+------ ---------------------------------------------------- ----------- ------------------------- ----------- --------- 
+
+C-Layers (4)
+------ ---------------- ---- --------------- ------ ----- ------------------------------------------------------- ------------------ 
+c_id   name (*_layer)   id   layer_type      macc   rom   tensors                                                 shape (array id)   
+------ ---------------- ---- --------------- ------ ----- ------------------------------------------------------- ------------------ 
+0      gemm_0           0    Dense           112    160   I: serving_default_normalized_sensor_features0_output   int8(1x6) (14)     
+                                                          S: gemm_0_scratch0                                                         
+                                                          W: gemm_0_weights                                       int8(16x6) (3)     
+                                                          W: gemm_0_bias                                          int32(16) (0)      
+                                                          O: gemm_0_output                                        int8(1x16) (1)     
+------ ---------------- ---- --------------- ------ ----- ------------------------------------------------------- ------------------ 
+1      gemm_1           1    Dense           136    160   I: gemm_0_output                                        int8(1x16) (1)     
+                                                          S: gemm_1_scratch0                                                         
+                                                          W: gemm_1_weights                                       int8(8x16) (7)     
+                                                          W: gemm_1_bias                                          int32(8) (4)       
+                                                          O: gemm_1_output                                        int8(1x8) (5)      
+------ ---------------- ---- --------------- ------ ----- ------------------------------------------------------- ------------------ 
+2      gemm_2           2    Dense           27     36    I: gemm_1_output                                        int8(1x8) (5)      
+                                                          S: gemm_2_scratch0                                                         
+                                                          W: gemm_2_weights                                       int8(3x8) (11)     
+                                                          W: gemm_2_bias                                          int32(3) (8)       
+                                                          O: gemm_2_output                                        int8(1x3) (9)      
+------ ---------------- ---- --------------- ------ ----- ------------------------------------------------------- ------------------ 
+3      nl_3             3    Nonlinearity    45     0     I: gemm_2_output                                        int8(1x3) (9)      
+                                                          S: nl_3_scratch0                                                           
+                                                          O: nl_3_output                                          int8(1x3) (12)     
+------ ---------------- ---- --------------- ------ ----- ------------------------------------------------------- ------------------ 
+
+
+
+Number of operations per c-layer
+------- ------ --------------------- ----- ------------ 
+c_id    m_id   name (type)             #op         type 
+------- ------ --------------------- ----- ------------ 
+0       0      gemm_0 (Dense)          112   smul_s8_s8 
+1       1      gemm_1 (Dense)          136   smul_s8_s8 
+2       2      gemm_2 (Dense)           27   smul_s8_s8 
+3       3      nl_3 (Nonlinearity)      45     op_s8_s8 
+------- ------ --------------------- ----- ------------ 
+total                                  320 
+
+Number of operation types
+---------------- ----- ----------- 
+operation type       #           % 
+---------------- ----- ----------- 
+smul_s8_s8         275       85.9% 
+op_s8_s8            45       14.1% 
+
+Complexity report (model)
+------ ------------------------------------------ ------------------------- ------------------------- ------ 
+m_id   name                                       c_macc                    c_rom                     c_id   
+------ ------------------------------------------ ------------------------- ------------------------- ------ 
+0      serving_default_normalized_s.._features0   |||||||||||||     35.0%   ||||||||||||||||  44.9%   [0]    
+1      occupancy_mlp_1_dense_8_1_MatMul           ||||||||||||||||  42.5%   ||||||||||||||||  44.9%   [1]    
+2      occupancy_mlp_1_occupancy_1_MatMul         |||                8.4%   ||||              10.1%   [2]    
+3      nl_3                                       |||||             14.1%   |                  0.0%   [3]    
+------ ------------------------------------------ ------------------------- ------------------------- ------ 
+macc=320 weights=356 act=1,028 ram_io=0
+ 
+ Requested memory size by section - "stm32l4" target
+ ------------------------------ -------- -------- ------- ------- 
+ module                             text   rodata    data     bss 
+ ------------------------------ -------- -------- ------- ------- 
+ NetworkRuntime1020_CM4_GCC.a     10,752        0       0       0 
+ occupancy.o                         576      348   1,744     116 
+ occupancy_data.o                     48       16      88       0 
+ lib (toolchain)*                      0        0       0       0 
+ ------------------------------ -------- -------- ------- ------- 
+ RT total**                       11,376      364   1,832     116 
+ ------------------------------ -------- -------- ------- ------- 
+ weights                               0      360       0       0 
+ activations                           0        0       0   1,028 
+ io                                    0        0       0       0 
+ ------------------------------ -------- -------- ------- ------- 
+ TOTAL                            11,376      724   1,832   1,144 
+ ------------------------------ -------- -------- ------- ------- 
+ *  toolchain objects (libm/libgcc*)
+ ** RT AI runtime objects (kernels+infrastructure)
+  
+  Summary - "stm32l4" target
+  ---------------------------------------------------
+               FLASH (ro)      %*   RAM (rw)       % 
+  ---------------------------------------------------
+  RT total         13,572   97.4%      1,948   65.5% 
+  ---------------------------------------------------
+  TOTAL            13,932              2,976         
+  ---------------------------------------------------
+  *  rt/total
+
+
+Generated files (7)
+-------------------------------------------------------------------- 
+C:\Users\ahmed\.stm32cubemx\network_output\occupancy_data_params.h   
+C:\Users\ahmed\.stm32cubemx\network_output\occupancy_data_params.c   
+C:\Users\ahmed\.stm32cubemx\network_output\occupancy_data.h          
+C:\Users\ahmed\.stm32cubemx\network_output\occupancy_data.c          
+C:\Users\ahmed\.stm32cubemx\network_output\occupancy_config.h        
+C:\Users\ahmed\.stm32cubemx\network_output\occupancy.h               
+C:\Users\ahmed\.stm32cubemx\network_output\occupancy.c               

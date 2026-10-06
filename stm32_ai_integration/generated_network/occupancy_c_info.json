@@ -587,7 +587,7 @@
     "test_name": "",
     "tools": [
       {
-        "arguments": "generate --target stm32 --type tflite --name occupancy --model ai_module\\tensorflow_occupancy\\artifacts_pir_v2\\occupancy_model_int8.tflite --workspace stm32_ai_integration\\generate_workspace --output stm32_ai_integration\\generated_network --optimization balanced --c-api legacy --verbosity 1",
+        "arguments": "generate --target stm32 --type tflite --name occupancy --model C:\\Users\\ahmed\\Downloads\\VeCAD project AHMED\\ai_module\\tensorflow_occupancy\\artifacts_pir_v2\\occupancy_model_int8.tflite --workspace C:\\Users\\ahmed\\Downloads\\VeCAD project AHMED\\stm32_ai_integration\\generate_workspace --output C:\\Users\\ahmed\\Downloads\\VeCAD project AHMED\\stm32_ai_integration\\generated_network --optimization balanced --c-api legacy --verbosity 1",
         "environment": [],
         "input_model": {
           "model_files": [

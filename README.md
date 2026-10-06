@@ -1,156 +1,67 @@
-# Smart Classroom Occupancy Detection with TinyML on STM32
+# TinyML Classroom Occupancy Estimation
 
-An end-to-end embedded AI prototype for **classroom occupancy estimation and energy-aware monitoring**, developed during the **VeCAD Elite Internship 2026**.
+An embedded classroom-occupancy prototype for the VeCAD Elite Internship 2026. The system collects motion and environmental readings, estimates occupancy locally on an STM32 NUCLEO-L476RG, and provides a low-voltage energy-awareness reminder when the room appears empty while light remains on.
 
-The system collects motion and environmental sensor data, trains a compact TensorFlow model for three occupancy classes, quantizes it to INT8, and prepares it for on-device inference on an **STM32 NUCLEO-L476RG** using **STM32Cube.AI / ST Edge AI**.
+## Project outcome
 
-> **Occupancy classes:** `EMPTY` · `LOW` · `HIGH`
+The deployed classifier uses six features derived from two PIR sensors and predicts three occupancy classes:
 
-![System architecture](assets/system_architecture.png)
+- **EMPTY**: no person in the room
+- **LOW**: one person in the room
+- **HIGH**: two or three people in the room
 
-## Project Highlights
+The final INT8 TensorFlow Lite model achieved **88.67% test accuracy** and **87.47% macro F1** on 256 windows from recording sessions not used during training. The model file is 3,616 bytes. STM32Cube.AI analysis reports 320 MACC per inference, 13.60 KiB Flash, and 2.91 KiB RAM.
 
-- **Embedded target:** STM32 NUCLEO-L476RG
-- **TinyML task:** 3-class occupancy classification
-- **AI input:** 6 motion features derived from 2 PIR sensors
-- **Window:** 30 samples, with a new decision every 5 samples
-- **Test accuracy:** **88.67%**
-- **Macro F1:** **87.47%**
-- **INT8 TFLite model:** **3,616 bytes**
-- **STM32Cube.AI inference footprint:** 356-byte weights, 1,028-byte activation RAM, 320 MACC/inference
-- **Additional sensing:** BME280, BH1750, VL53L0X, OLED, LEDs and buzzer
-- **Data pipeline:** sensor acquisition → CSV logging → cleaning → feature windows → TensorFlow training → INT8 quantization → STM32 deployment
+## Repository structure
 
-## System Overview
+| Path | Contents |
+| --- | --- |
+| `firmware/stm32cubeide/Smart_Classroom_Occupancy` | Complete STM32CubeIDE project, including the CubeMX `.ioc` configuration, STM32 drivers, X-CUBE-AI generated network, and application source code. |
+| `assets` | Visual assets retained from the initial repository upload. |
+| `firmware/current` | Reference firmware saved during the project. |
+| `firmware/sensor_tests` | Individual sensor and bus-test code. |
+| `data_collection` | Serial logger, cleaning script, session plan, raw labelled CSV sessions, and processed training dataset. |
+| `ai_module/tensorflow_occupancy` | Window-feature generation, TensorFlow training code, split configuration, trained model artifacts, and recorded evaluation results. |
+| `stm32_ai_integration` | Feature normalisation, quantisation helpers, and generated STM32Cube.AI network files. |
+| `documentation` | Internship documentation, logbooks, project reference material, and presentation assets. |
+| `deliverables/final_presentation` | Final presentation PDF, editable PowerPoint source, and the printable ten-minute presentation script. |
 
-The classifier intentionally uses only the two PIR sensors as model inputs. The other sensors provide environmental and distance context for monitoring and warning rules.
+The earlier Arabic project guides remain available as `README_AR.md` files in the relevant folders.
 
-![Project introduction](assets/project_introduction.png)
+## System overview
 
-### Hardware
+- Two PIR sensors provide the six motion features used by the classifier.
+- BME280, BH1750, and VL53L0X readings support environmental monitoring, display, and warning rules. They are not model inputs in the final classifier.
+- The model uses a 30-sample motion window and updates its result every five samples after the first full window.
+- The NUCLEO-L476RG runs the quantised model locally and sends the result to the OLED, LEDs, buzzer, and serial monitor.
 
-| Component | Purpose |
-|---|---|
-| STM32 NUCLEO-L476RG | Main embedded controller |
-| 2 × PIR sensors | Motion features used by the AI model |
-| BME280 | Temperature, humidity and pressure |
-| BH1750 | Ambient light measurement |
-| VL53L0X | Distance/context sensing |
-| OLED display | Live measurements and AI result |
-| HC-06 | Optional Bluetooth data link |
-| LEDs + active buzzer | Local status and warning feedback |
+## Data and model
 
-## Machine Learning Results
+The final cleaned dataset contains 6,479 accepted sensor readings from 13 labelled sessions. Training keeps whole recording sessions separate across training, validation, and test data to avoid leakage. The neural network architecture is `6 -> 16 ReLU -> 8 ReLU -> 3 Softmax`, with 275 trainable parameters.
 
-The selected model uses six PIR-derived features:
+Model inputs, in order:
 
-`pir_1_ratio`, `pir_2_ratio`, `pir_any_ratio`, `pir_both_ratio`, `pir_1_rising_edges`, `pir_2_rising_edges`.
+1. PIR 1 active ratio
+2. PIR 2 active ratio
+3. Any-PIR active ratio
+4. Both-PIR active ratio
+5. PIR 1 rising-edge count
+6. PIR 2 rising-edge count
 
-| Split | Accuracy | Macro F1 |
-|---|---:|---:|
-| Train | 87.25% | 88.44% |
-| Validation | 81.37% | 83.18% |
-| Test | **88.67%** | **87.47%** |
-| INT8 test | **88.67%** | **87.47%** |
+## Running the software
 
-![Training curves](assets/training_curves.png)
+### Data collection and training
 
-![Confusion matrix](assets/confusion_matrix.png)
+Install the requirements listed in `data_collection/requirements.txt` and `ai_module/tensorflow_occupancy/requirements.txt`. The scripts and their Arabic usage notes are stored beside the data and model artifacts.
 
-Detailed metrics are stored in `ai_module/tensorflow_occupancy/artifacts_pir_v2/metrics.json`.
+### STM32 firmware
 
-## Repository Structure
+Open `firmware/stm32cubeide/Smart_Classroom_Occupancy` as an existing STM32CubeIDE project. The `.ioc` file targets the NUCLEO-L476RG. The generated `Debug` build directory is deliberately not tracked; build the project locally after importing it.
 
-```text
-.
-├── assets/                     # Images used in this README
-├── firmware/                   # STM32 reference firmware and sensor tests
-├── data_collection/            # Serial logger, raw data, cleaning and planning
-├── ai_module/
-│   └── tensorflow_occupancy/   # Feature engineering, training and model artifacts
-├── stm32_ai_integration/       # TinyML preprocessing and STM32Cube.AI integration
-├── docs/                       # Selected portfolio documentation
-└── README.md                   # Project overview
-```
+## Safety scope
 
-## Data Collection
+This prototype provides low-voltage local feedback only. It does not switch building mains, lighting circuits, or air-conditioning equipment directly.
 
-The STM32 records synchronized sensor readings once per second. A Python serial logger saves the readings into CSV files, while occupancy labels are assigned as `EMPTY`, `LOW`, or `HIGH`.
+## Third-party components
 
-Install the logger dependency:
-
-```bash
-python -m pip install -r data_collection/requirements.txt
-```
-
-Example serial logging command:
-
-```bash
-python data_collection/serial_data_logger.py --port COM8 --baud 115200
-```
-
-Raw recordings are preserved in `data_collection/collected_data/raw/`. The cleaned training dataset is available at:
-
-```text
-data_collection/collected_data/processed/occupancy_training_dataset_v7.csv
-```
-
-## Training Pipeline
-
-Build 30-sample windows:
-
-```bash
-python ai_module/tensorflow_occupancy/build_window_dataset.py \
-  data_collection/collected_data/processed/occupancy_training_dataset_v7.csv \
-  --output ai_module/tensorflow_occupancy/window_features_v2.csv \
-  --window-size 30 --step-size 5
-```
-
-Train the selected PIR model:
-
-```bash
-python ai_module/tensorflow_occupancy/train_tensorflow.py \
-  ai_module/tensorflow_occupancy/window_features_v2.csv \
-  --artifacts ai_module/tensorflow_occupancy/artifacts_pir_v2 \
-  --feature-set pir \
-  --split-config ai_module/tensorflow_occupancy/split_config_v2.csv
-```
-
-The main deployment artifact is:
-
-```text
-ai_module/tensorflow_occupancy/artifacts_pir_v2/occupancy_model_int8.tflite
-```
-
-## STM32 TinyML Integration
-
-`stm32_ai_integration/` contains the preprocessing code and a reference copy of the network generated with STM32Cube.AI / ST Edge AI.
-
-At runtime, the MCU:
-
-1. Collects the latest 30 PIR samples.
-2. Computes the six model features.
-3. Normalizes and quantizes the feature vector to INT8.
-4. Runs the neural-network inference locally.
-5. Selects `EMPTY`, `LOW`, or `HIGH` from the model output.
-6. Displays the result and uses environmental context for local warning logic.
-
-## Important Firmware Note
-
-`firmware/current/main_pir_filtered.c` is the latest data-collection `main` snapshot stored in this repository. The complete final STM32CubeIDE project that contained the fully integrated AI application is **not** included here, so this file should not be copied over a working CubeIDE `Core/Src/main.c` without comparison.
-
-## Portfolio Documentation
-
-Selected supporting material is available in `docs/`, including the final presentation and the 10-day project diary.
-
-Local IDE metadata, Jupyter runtime state, temporary files, caches, duplicate presentation revisions and non-English helper notes were intentionally excluded from this public-ready version.
-
-## Author
-
-**Ahmed Mohamed Abdalla Ahmed**  
-Electrical Engineering student  
-GitHub: [@ahmed-mohamvd](https://github.com/ahmed-mohamvd)
-
-## Notes on Licensing
-
-This repository contains original project work together with generated STM32Cube.AI files. Generated/third-party components retain their own license terms; see `stm32_ai_integration/generated_network/LICENSE.txt` where applicable.
+The STM32CubeIDE project includes STMicroelectronics-generated X-CUBE-AI content and drivers. Their original licence files are retained in the project tree, including `LICENSE_X-CUBE-AI.txt`.

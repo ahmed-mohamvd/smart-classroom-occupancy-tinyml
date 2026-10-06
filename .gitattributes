@@ -1,0 +1,13 @@
+# Keep generated and deliverable binaries out of textual diffs.
+*.pdf binary
+*.pptx binary
+*.docx binary
+*.xlsx binary
+*.png binary
+*.tflite binary
+*.keras binary
+*.a binary
+
+# Keep vendor-generated STM32 and Cube.AI sources byte-for-byte unchanged.
+firmware/stm32cubeide/** -whitespace
+stm32_ai_integration/generated_network/** -whitespace

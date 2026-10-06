@@ -1,6 +1,6 @@
 {
-  "source_windows": "ai_module\\tensorflow_occupancy\\window_features_v2.csv",
-  "split_config": "ai_module\\tensorflow_occupancy\\split_config_v2.csv",
+  "source_windows": "C:\\Users\\ahmed\\Downloads\\VeCAD project AHMED\\ai_module\\tensorflow_occupancy\\window_features_v2.csv",
+  "split_config": "C:\\Users\\ahmed\\Downloads\\VeCAD project AHMED\\ai_module\\tensorflow_occupancy\\split_config_v2.csv",
   "feature_set": "pir",
   "feature_names": [
     "pir_1_ratio",
