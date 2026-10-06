@@ -1,0 +1,118 @@
+{
+  "source_windows": "ai_module\\tensorflow_occupancy\\window_features_v2.csv",
+  "split_config": "ai_module\\tensorflow_occupancy\\split_config_v2.csv",
+  "feature_set": "pir",
+  "feature_names": [
+    "pir_1_ratio",
+    "pir_2_ratio",
+    "pir_any_ratio",
+    "pir_both_ratio",
+    "pir_1_rising_edges",
+    "pir_2_rising_edges"
+  ],
+  "epochs_completed": 49,
+  "model_sizes_bytes": {
+    "keras": 31588,
+    "float_tflite": 3396,
+    "int8_tflite": 3616
+  },
+  "split_method": "explicit complete-recording split configuration",
+  "metrics": {
+    "train": {
+      "accuracy": 0.872534,
+      "macro_f1": 0.884359,
+      "per_class": {
+        "EMPTY": {
+          "precision": 0.923077,
+          "recall": 1.0,
+          "f1": 0.96,
+          "support": 144
+        },
+        "LOW": {
+          "precision": 0.867647,
+          "recall": 0.830986,
+          "f1": 0.848921,
+          "support": 284
+        },
+        "HIGH": {
+          "precision": 0.844156,
+          "recall": 0.844156,
+          "f1": 0.844156,
+          "support": 231
+        }
+      }
+    },
+    "validation": {
+      "accuracy": 0.813725,
+      "macro_f1": 0.83179,
+      "per_class": {
+        "EMPTY": {
+          "precision": 0.92,
+          "recall": 1.0,
+          "f1": 0.958333,
+          "support": 69
+        },
+        "LOW": {
+          "precision": 0.743363,
+          "recall": 0.763636,
+          "f1": 0.753363,
+          "support": 110
+        },
+        "HIGH": {
+          "precision": 0.813559,
+          "recall": 0.755906,
+          "f1": 0.783673,
+          "support": 127
+        }
+      }
+    },
+    "test": {
+      "accuracy": 0.886719,
+      "macro_f1": 0.874678,
+      "per_class": {
+        "EMPTY": {
+          "precision": 0.971429,
+          "recall": 1.0,
+          "f1": 0.985507,
+          "support": 102
+        },
+        "LOW": {
+          "precision": 0.686747,
+          "recall": 1.0,
+          "f1": 0.814286,
+          "support": 57
+        },
+        "HIGH": {
+          "precision": 1.0,
+          "recall": 0.701031,
+          "f1": 0.824242,
+          "support": 97
+        }
+      }
+    },
+    "test_int8": {
+      "accuracy": 0.886719,
+      "macro_f1": 0.874678,
+      "per_class": {
+        "EMPTY": {
+          "precision": 0.971429,
+          "recall": 1.0,
+          "f1": 0.985507,
+          "support": 102
+        },
+        "LOW": {
+          "precision": 0.686747,
+          "recall": 1.0,
+          "f1": 0.814286,
+          "support": 57
+        },
+        "HIGH": {
+          "precision": 1.0,
+          "recall": 0.701031,
+          "f1": 0.824242,
+          "support": 97
+        }
+      }
+    }
+  }
+}

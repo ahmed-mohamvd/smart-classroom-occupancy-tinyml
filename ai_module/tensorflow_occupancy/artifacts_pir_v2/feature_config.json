@@ -1,0 +1,34 @@
+{
+  "feature_names": [
+    "pir_1_ratio",
+    "pir_2_ratio",
+    "pir_any_ratio",
+    "pir_both_ratio",
+    "pir_1_rising_edges",
+    "pir_2_rising_edges"
+  ],
+  "class_names": [
+    "EMPTY",
+    "LOW",
+    "HIGH"
+  ],
+  "window_samples": 30,
+  "step_samples": 5,
+  "normalization_mean": [
+    0.18325746059417725,
+    0.152706116437912,
+    0.2979767322540283,
+    0.03798685222864151,
+    3.177541732788086,
+    2.210925579071045
+  ],
+  "normalization_standard_deviation": [
+    0.15923622250556946,
+    0.15343208611011505,
+    0.2113679200410843,
+    0.06247786805033684,
+    2.7039642333984375,
+    2.1993520259857178
+  ],
+  "model_input": "(feature - mean) / standard_deviation"
+}

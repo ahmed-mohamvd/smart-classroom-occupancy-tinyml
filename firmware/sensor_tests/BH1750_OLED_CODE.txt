@@ -1,0 +1,394 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : BH1750 ambient-light sensor + SSD1306 OLED test
+  ******************************************************************************
+  * BH1750 and OLED share the same I2C1 SDA/SCL lines.
+  * The program detects both valid BH1750 addresses: 0x23 and 0x5C.
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+#include "i2c.h"
+#include "usart.h"
+#include "gpio.h"
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include <stdio.h>
+#include <string.h>
+#include "fonts.h"
+#include "ssd1306.h"
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+/* Valid 7-bit BH1750 addresses. STM32 HAL shifts them left by one bit. */
+#define BH1750_ADDR_LOW            0x23U /* ADDR connected to GND */
+#define BH1750_ADDR_HIGH           0x5CU /* ADDR connected to VCC */
+
+#define BH1750_POWER_ON            0x01U
+#define BH1750_RESET               0x07U
+#define BH1750_CONT_HIGH_RES_MODE  0x10U
+/* USER CODE END PD */
+
+/* Private macro -------------------------------------------------------------*/
+/* USER CODE BEGIN PM */
+
+/* USER CODE END PM */
+
+/* Private variables ---------------------------------------------------------*/
+
+/* USER CODE BEGIN PV */
+char oled_string[32];
+char uart_string[80];
+uint16_t bh1750_raw;
+uint32_t light_lux_x10; /* Lux multiplied by 10, e.g. 1234 means 123.4 lux. */
+uint16_t bh1750_addr_hal;
+uint8_t bh1750_addr_7bit;
+HAL_StatusTypeDef bh1750_status;
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+/* USER CODE BEGIN PFP */
+void UART_Print(const char *msg);
+void I2C_Scan(void);
+HAL_StatusTypeDef BH1750_DetectAddress(void);
+HAL_StatusTypeDef BH1750_WriteCommand(uint8_t command);
+HAL_StatusTypeDef BH1750_Init(void);
+HAL_StatusTypeDef BH1750_ReadLuxX10(uint32_t *lux_x10, uint16_t *raw_value);
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+void UART_Print(const char *msg)
+{
+  HAL_UART_Transmit(&huart2, (uint8_t *)msg, strlen(msg), HAL_MAX_DELAY);
+}
+
+void I2C_Scan(void)
+{
+  uint8_t address;
+  uint8_t devices_found = 0;
+
+  UART_Print("Scanning I2C1 addresses...\r\n");
+
+  for (address = 0x08U; address <= 0x77U; address++)
+  {
+    if (HAL_I2C_IsDeviceReady(&hi2c1, (uint16_t)(address << 1), 2, 10) == HAL_OK)
+    {
+      snprintf(uart_string,
+               sizeof(uart_string),
+               "I2C device found at 7-bit address 0x%02X\r\n",
+               (unsigned int)address);
+      UART_Print(uart_string);
+      devices_found++;
+    }
+  }
+
+  if (devices_found == 0U)
+  {
+    UART_Print("No I2C devices found. Check SDA, SCL, GND and power.\r\n");
+  }
+  else
+  {
+    snprintf(uart_string,
+             sizeof(uart_string),
+             "I2C scan complete: %u device(s) found.\r\n",
+             (unsigned int)devices_found);
+    UART_Print(uart_string);
+  }
+}
+
+HAL_StatusTypeDef BH1750_DetectAddress(void)
+{
+  if (HAL_I2C_IsDeviceReady(&hi2c1,
+                            (uint16_t)(BH1750_ADDR_LOW << 1),
+                            3,
+                            100) == HAL_OK)
+  {
+    bh1750_addr_7bit = BH1750_ADDR_LOW;
+    bh1750_addr_hal = (uint16_t)(BH1750_ADDR_LOW << 1);
+    return HAL_OK;
+  }
+
+  if (HAL_I2C_IsDeviceReady(&hi2c1,
+                            (uint16_t)(BH1750_ADDR_HIGH << 1),
+                            3,
+                            100) == HAL_OK)
+  {
+    bh1750_addr_7bit = BH1750_ADDR_HIGH;
+    bh1750_addr_hal = (uint16_t)(BH1750_ADDR_HIGH << 1);
+    return HAL_OK;
+  }
+
+  bh1750_addr_7bit = 0U;
+  bh1750_addr_hal = 0U;
+  return HAL_ERROR;
+}
+
+HAL_StatusTypeDef BH1750_WriteCommand(uint8_t command)
+{
+  if (bh1750_addr_hal == 0U)
+  {
+    return HAL_ERROR;
+  }
+
+  return HAL_I2C_Master_Transmit(&hi2c1,
+                                 bh1750_addr_hal,
+                                 &command,
+                                 1,
+                                 100);
+}
+
+HAL_StatusTypeDef BH1750_Init(void)
+{
+  if (BH1750_DetectAddress() != HAL_OK)
+  {
+    return HAL_ERROR;
+  }
+
+  if (BH1750_WriteCommand(BH1750_POWER_ON) != HAL_OK)
+  {
+    return HAL_ERROR;
+  }
+  HAL_Delay(10);
+
+  if (BH1750_WriteCommand(BH1750_RESET) != HAL_OK)
+  {
+    return HAL_ERROR;
+  }
+  HAL_Delay(10);
+
+  if (BH1750_WriteCommand(BH1750_CONT_HIGH_RES_MODE) != HAL_OK)
+  {
+    return HAL_ERROR;
+  }
+
+  /* High-resolution measurement typically needs about 120 ms. */
+  HAL_Delay(180);
+  return HAL_OK;
+}
+
+HAL_StatusTypeDef BH1750_ReadLuxX10(uint32_t *lux_x10, uint16_t *raw_value)
+{
+  uint8_t data[2];
+
+  if ((lux_x10 == NULL) || (raw_value == NULL))
+  {
+    return HAL_ERROR;
+  }
+
+  /* BH1750 returns two data bytes directly; it has no register address here. */
+  if (HAL_I2C_Master_Receive(&hi2c1,
+                             bh1750_addr_hal,
+                             data,
+                             2,
+                             100) != HAL_OK)
+  {
+    return HAL_ERROR;
+  }
+
+  *raw_value = ((uint16_t)data[0] << 8) | data[1];
+
+  /* Continuous H-resolution mode: lux = raw / 1.2.
+     This integer calculation keeps one decimal place and avoids printf-float. */
+  *lux_x10 = (((uint32_t)(*raw_value) * 100U) + 6U) / 12U;
+
+  return HAL_OK;
+}
+/* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+  /* USER CODE BEGIN 1 */
+
+  /* USER CODE END 1 */
+
+  HAL_Init();
+
+  /* USER CODE BEGIN Init */
+
+  /* USER CODE END Init */
+
+  SystemClock_Config();
+
+  /* USER CODE BEGIN SysInit */
+
+  /* USER CODE END SysInit */
+
+  MX_GPIO_Init();
+  MX_USART2_UART_Init();
+  MX_I2C1_Init();
+
+  /* USER CODE BEGIN 2 */
+  UART_Print("=== BH1750 + OLED Test Started ===\r\n");
+
+  /* This scan should normally show the OLED at 0x3C (or 0x3D),
+     and the BH1750 at 0x23 or 0x5C. */
+  I2C_Scan();
+
+  SSD1306_Init();
+  SSD1306_Fill(SSD1306_COLOR_BLACK);
+  SSD1306_GotoXY(0, 0);
+  SSD1306_Puts("BH1750 + OLED", &Font_7x10, 1);
+  SSD1306_GotoXY(0, 18);
+  SSD1306_Puts("Starting...", &Font_7x10, 1);
+  SSD1306_UpdateScreen();
+
+  bh1750_status = BH1750_Init();
+
+  if (bh1750_status == HAL_OK)
+  {
+    snprintf(uart_string,
+             sizeof(uart_string),
+             "BH1750 init OK at 7-bit address 0x%02X.\r\n",
+             (unsigned int)bh1750_addr_7bit);
+    UART_Print(uart_string);
+  }
+  else
+  {
+    UART_Print("BH1750 not found at 0x23 or 0x5C. Check scan above.\r\n");
+  }
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+    if (bh1750_status == HAL_OK)
+    {
+      bh1750_status = BH1750_ReadLuxX10(&light_lux_x10, &bh1750_raw);
+    }
+
+    if (bh1750_status == HAL_OK)
+    {
+      snprintf(oled_string,
+               sizeof(oled_string),
+               "Light:%5lu.%1lu lx",
+               (unsigned long)(light_lux_x10 / 10U),
+               (unsigned long)(light_lux_x10 % 10U));
+
+      snprintf(uart_string,
+               sizeof(uart_string),
+               "BH1750 raw=%u, light=%lu.%lu lux\r\n",
+               (unsigned int)bh1750_raw,
+               (unsigned long)(light_lux_x10 / 10U),
+               (unsigned long)(light_lux_x10 % 10U));
+      UART_Print(uart_string);
+
+      /* Clear the previous frame before drawing the new values.
+         Without this, shorter text leaves old pixels on the OLED. */
+      SSD1306_Fill(SSD1306_COLOR_BLACK);
+      SSD1306_GotoXY(0, 0);
+      SSD1306_Puts("Ambient Light", &Font_7x10, 1);
+      SSD1306_GotoXY(0, 22);
+      SSD1306_Puts(oled_string, &Font_7x10, 1);
+      SSD1306_GotoXY(0, 44);
+      SSD1306_Puts("Sensor: OK    ", &Font_7x10, 1);
+      SSD1306_UpdateScreen();
+    }
+    else
+    {
+      UART_Print("BH1750 read FAILED; retrying init...\r\n");
+
+      SSD1306_Fill(SSD1306_COLOR_BLACK);
+      SSD1306_GotoXY(0, 0);
+      SSD1306_Puts("BH1750 ERROR ", &Font_7x10, 1);
+      SSD1306_GotoXY(0, 22);
+      SSD1306_Puts("Check wiring    ", &Font_7x10, 1);
+      SSD1306_GotoXY(0, 44);
+      SSD1306_Puts("See UART scan ", &Font_7x10, 1);
+      SSD1306_UpdateScreen();
+
+      HAL_Delay(1000);
+      bh1750_status = BH1750_Init();
+    }
+
+    HAL_Delay(500);
+
+    /* USER CODE END WHILE */
+
+    /* USER CODE BEGIN 3 */
+  }
+  /* USER CODE END 3 */
+}
+
+/**
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 1;
+  RCC_OscInitStruct.PLL.PLLN = 10;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
+  RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
+  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK | RCC_CLOCKTYPE_SYSCLK |
+                              RCC_CLOCKTYPE_PCLK1 | RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+/* USER CODE BEGIN 4 */
+
+/* USER CODE END 4 */
+
+void Error_Handler(void)
+{
+  /* USER CODE BEGIN Error_Handler_Debug */
+  __disable_irq();
+  while (1)
+  {
+  }
+  /* USER CODE END Error_Handler_Debug */
+}
+
+#ifdef USE_FULL_ASSERT
+void assert_failed(uint8_t *file, uint32_t line)
+{
+  /* USER CODE BEGIN 6 */
+  (void)file;
+  (void)line;
+  /* USER CODE END 6 */
+}
+#endif /* USE_FULL_ASSERT */

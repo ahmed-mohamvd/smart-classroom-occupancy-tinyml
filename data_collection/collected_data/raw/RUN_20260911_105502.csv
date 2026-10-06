@@ -1,0 +1,1 @@
+timestamp,run_id,sequence,mcu_time_ms,session_id,pir_1,pir_2,tof_mm,tof_status,temperature_c,humidity_percent,pressure_hpa,light_lux,sample_valid,occupancy_label

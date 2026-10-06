@@ -1,0 +1,44 @@
+{
+  "source_rows": 6653,
+  "accepted_rows": 6479,
+  "rejected_rows": 174,
+  "edge_trim_seconds_per_side": 5.0,
+  "edge_trim_overrides": {
+    "S01_EMPTY_ACOFF_LIGHTOFF": {
+      "start_rows": 6,
+      "end_rows": 16
+    },
+    "S02_EMPTY_ACOFF_LIGHTON": {
+      "start_rows": 5,
+      "end_rows": 7
+    },
+    "S03_EMPTY_ACON_LIGHTON_R2": {
+      "start_rows": 9,
+      "end_rows": 4
+    },
+    "S20_EMPTY_ACON_LIGHTON_LOC2": {
+      "start_rows": 15,
+      "end_rows": 17
+    }
+  },
+  "edge_trimmed_rows": 174,
+  "gap_threshold_seconds": 5.0,
+  "gap_breaks_detected": 1,
+  "tof_original_valid_rows": 504,
+  "tof_no_target_encoded_rows": 6149,
+  "invalid_tof_encoded_value_mm": 2000.0,
+  "tof_rows_forward_filled": 0,
+  "max_tof_gap_samples": 0,
+  "causal_median_window_samples": 1,
+  "records_per_class": {
+    "EMPTY": 1686,
+    "LOW": 2406,
+    "HIGH": 2387
+  },
+  "sessions_per_class": {
+    "EMPTY": 4,
+    "LOW": 5,
+    "HIGH": 4
+  },
+  "warnings": []
+}

@@ -1,0 +1,798 @@
+/* USER CODE BEGIN Header */
+/**
+  ******************************************************************************
+  * @file           : main.c
+  * @brief          : Complete hardware integration test without BH1750
+  *
+  * Hardware used:
+  *   - NUCLEO-L476RG
+  *   - BME280 (temperature, humidity, pressure)
+  *   - VL53L0X ToF distance sensor
+  *   - SSD1306 OLED
+  *   - Two PIR sensors
+  *   - Red and green LEDs plus the Nucleo LD2 LED
+  *   - Two active-low push buttons
+  *   - Active buzzer module
+  *
+  * Button 1: cycle manual ground-truth label EMPTY -> LOW -> HIGH
+  * Button 2: start/stop CSV logging
+  * LEDs:    EMPTY=green, LOW=green+red, HIGH=red
+  * LD2:     ON while CSV logging is enabled
+  * Buzzer:  short confirmation beep on button actions
+  *
+  * BH1750 is intentionally not included. Add it only after a replacement
+  * module is detected by the I2C scanner at address 0x23 or 0x5C.
+  ******************************************************************************
+  */
+/* USER CODE END Header */
+
+/* Includes ------------------------------------------------------------------*/
+#include "main.h"
+#include "i2c.h"
+#include "usart.h"
+#include "gpio.h"
+
+/* Private includes ----------------------------------------------------------*/
+/* USER CODE BEGIN Includes */
+#include <stdio.h>
+#include <string.h>
+#include "./BME280/bme280.h"
+#include "fonts.h"
+#include "ssd1306.h"
+#include "vl53l0x_api.h"
+/* USER CODE END Includes */
+
+/* Private typedef -----------------------------------------------------------*/
+/* USER CODE BEGIN PTD */
+typedef enum
+{
+  LABEL_EMPTY = 0,
+  LABEL_LOW,
+  LABEL_HIGH
+} OccupancyLabel_t;
+
+typedef struct
+{
+  GPIO_PinState raw_state;
+  GPIO_PinState stable_state;
+  uint32_t change_time_ms;
+} ButtonDebounce_t;
+/* USER CODE END PTD */
+
+/* Private define ------------------------------------------------------------*/
+/* USER CODE BEGIN PD */
+#define VL53L0X_ADDRESS_7BIT       0x29U
+#define VL53L0X_ADDRESS_HAL        (VL53L0X_ADDRESS_7BIT << 1)
+
+#define SAMPLE_INTERVAL_MS         1000U
+#define BUTTON_DEBOUNCE_MS         35U
+#define BUZZER_BEEP_MS             80U
+
+/* Change both values if your active buzzer module uses active-low input. */
+#define BUZZER_ACTIVE_LEVEL        GPIO_PIN_SET
+#define BUZZER_INACTIVE_LEVEL      GPIO_PIN_RESET
+/* USER CODE END PD */
+
+/* Private variables ---------------------------------------------------------*/
+/* USER CODE BEGIN PV */
+char uart_string[220];
+char display_string[32];
+
+GPIO_PinState pir1_state;
+GPIO_PinState pir2_state;
+
+struct bme280_dev bme_device;
+struct bme280_data bme_data;
+int8_t bme_status;
+uint8_t bme_initialized;
+float temperature_c;
+float humidity_percent;
+float pressure_hpa;
+
+VL53L0X_Dev_t tof_device;
+VL53L0X_RangingMeasurementData_t tof_measurement;
+VL53L0X_Error tof_status;
+uint32_t tof_ref_spad_count;
+uint8_t tof_is_aperture_spads;
+uint8_t tof_vhv_settings;
+uint8_t tof_phase_cal;
+uint8_t tof_initialized;
+uint16_t tof_distance_mm;
+uint8_t tof_range_status;
+
+OccupancyLabel_t selected_label = LABEL_EMPTY;
+uint8_t logging_enabled = 0U;
+uint32_t session_number = 0U;
+uint32_t last_sample_time_ms = 0U;
+
+ButtonDebounce_t button1;
+ButtonDebounce_t button2;
+
+uint8_t buzzer_is_on = 0U;
+uint32_t buzzer_stop_time_ms = 0U;
+/* USER CODE END PV */
+
+/* Private function prototypes -----------------------------------------------*/
+void SystemClock_Config(void);
+/* USER CODE BEGIN PFP */
+void UART_Print(const char *message);
+void I2C_Scan(void);
+
+int8_t BME_I2C_Read(uint8_t id, uint8_t reg_addr, uint8_t *data, uint16_t len);
+int8_t BME_I2C_Write(uint8_t id, uint8_t reg_addr, uint8_t *data, uint16_t len);
+void BME_DelayMs(uint32_t period);
+uint8_t BME_Init(void);
+uint8_t BME_Read(void);
+
+void TOF_PrintApiResult(const char *step, VL53L0X_Error status);
+VL53L0X_Error TOF_Init(void);
+uint8_t TOF_Read(void);
+
+const char *Label_Name(OccupancyLabel_t label);
+void Outputs_SetForLabel(OccupancyLabel_t label);
+void Buzzer_Start(uint32_t duration_ms);
+void Buzzer_Update(void);
+void Buttons_Init(void);
+uint8_t Button_Pressed(ButtonDebounce_t *button,
+                       GPIO_TypeDef *port,
+                       uint16_t pin);
+void Buttons_Update(void);
+
+void OLED_WriteLine(uint8_t y, const char *text);
+void Display_Update(void);
+void Sample_AllSensors(void);
+void UART_OutputSample(void);
+/* USER CODE END PFP */
+
+/* Private user code ---------------------------------------------------------*/
+/* USER CODE BEGIN 0 */
+void UART_Print(const char *message)
+{
+  HAL_UART_Transmit(&huart2,
+                    (uint8_t *)message,
+                    (uint16_t)strlen(message),
+                    HAL_MAX_DELAY);
+}
+
+void I2C_Scan(void)
+{
+  uint8_t address;
+  uint8_t count = 0U;
+
+  UART_Print("\r\nI2C scan:\r\n");
+
+  for (address = 0x08U; address <= 0x77U; address++)
+  {
+    if (HAL_I2C_IsDeviceReady(&hi2c1,
+                              (uint16_t)(address << 1),
+                              2,
+                              20) == HAL_OK)
+    {
+      snprintf(uart_string,
+               sizeof(uart_string),
+               "  device at 0x%02X\r\n",
+               (unsigned int)address);
+      UART_Print(uart_string);
+      count++;
+    }
+  }
+
+  snprintf(uart_string,
+           sizeof(uart_string),
+           "I2C devices found: %u\r\n\r\n",
+           (unsigned int)count);
+  UART_Print(uart_string);
+}
+
+int8_t BME_I2C_Read(uint8_t id,
+                    uint8_t reg_addr,
+                    uint8_t *data,
+                    uint16_t len)
+{
+  return (HAL_I2C_Mem_Read(&hi2c1,
+                           (uint16_t)(id << 1),
+                           reg_addr,
+                           I2C_MEMADD_SIZE_8BIT,
+                           data,
+                           len,
+                           100) == HAL_OK) ? 0 : -1;
+}
+
+int8_t BME_I2C_Write(uint8_t id,
+                     uint8_t reg_addr,
+                     uint8_t *data,
+                     uint16_t len)
+{
+  return (HAL_I2C_Mem_Write(&hi2c1,
+                            (uint16_t)(id << 1),
+                            reg_addr,
+                            I2C_MEMADD_SIZE_8BIT,
+                            data,
+                            len,
+                            100) == HAL_OK) ? 0 : -1;
+}
+
+void BME_DelayMs(uint32_t period)
+{
+  HAL_Delay(period);
+}
+
+uint8_t BME_Init(void)
+{
+  uint8_t address;
+
+  if (HAL_I2C_IsDeviceReady(&hi2c1, (uint16_t)(0x76U << 1), 3, 100) == HAL_OK)
+  {
+    address = 0x76U;
+  }
+  else if (HAL_I2C_IsDeviceReady(&hi2c1, (uint16_t)(0x77U << 1), 3, 100) == HAL_OK)
+  {
+    address = 0x77U;
+  }
+  else
+  {
+    UART_Print("BME280 not found at 0x76 or 0x77.\r\n");
+    return 0U;
+  }
+
+  memset(&bme_device, 0, sizeof(bme_device));
+  bme_device.dev_id = address;
+  bme_device.intf = BME280_I2C_INTF;
+  bme_device.read = BME_I2C_Read;
+  bme_device.write = BME_I2C_Write;
+  bme_device.delay_ms = BME_DelayMs;
+
+  bme_status = bme280_init(&bme_device);
+  if (bme_status != BME280_OK)
+  {
+    snprintf(uart_string,
+             sizeof(uart_string),
+             "BME280 init failed: %d\r\n",
+             (int)bme_status);
+    UART_Print(uart_string);
+    return 0U;
+  }
+
+  bme_device.settings.osr_h = BME280_OVERSAMPLING_1X;
+  bme_device.settings.osr_p = BME280_OVERSAMPLING_16X;
+  bme_device.settings.osr_t = BME280_OVERSAMPLING_2X;
+  bme_device.settings.filter = BME280_FILTER_COEFF_16;
+
+  bme_status = bme280_set_sensor_settings(
+      BME280_OSR_PRESS_SEL |
+      BME280_OSR_TEMP_SEL |
+      BME280_OSR_HUM_SEL |
+      BME280_FILTER_SEL,
+      &bme_device);
+
+  if (bme_status != BME280_OK)
+  {
+    UART_Print("BME280 settings failed.\r\n");
+    return 0U;
+  }
+
+  snprintf(uart_string,
+           sizeof(uart_string),
+           "BME280 ready at 0x%02X.\r\n",
+           (unsigned int)address);
+  UART_Print(uart_string);
+  return 1U;
+}
+
+uint8_t BME_Read(void)
+{
+  if (bme_initialized == 0U)
+  {
+    return 0U;
+  }
+
+  bme_status = bme280_set_sensor_mode(BME280_FORCED_MODE, &bme_device);
+  if (bme_status != BME280_OK)
+  {
+    return 0U;
+  }
+
+  BME_DelayMs(40U);
+  bme_status = bme280_get_sensor_data(BME280_ALL, &bme_data, &bme_device);
+  if (bme_status != BME280_OK)
+  {
+    return 0U;
+  }
+
+  temperature_c = bme_data.temperature / 100.0f;
+  humidity_percent = bme_data.humidity / 1024.0f;
+  pressure_hpa = bme_data.pressure / 10000.0f;
+  return 1U;
+}
+
+void TOF_PrintApiResult(const char *step, VL53L0X_Error status)
+{
+  snprintf(uart_string,
+           sizeof(uart_string),
+           "%s: API status=%d\r\n",
+           step,
+           (int)status);
+  UART_Print(uart_string);
+}
+
+VL53L0X_Error TOF_Init(void)
+{
+  VL53L0X_Error status;
+
+  if (HAL_I2C_IsDeviceReady(&hi2c1,
+                            VL53L0X_ADDRESS_HAL,
+                            3,
+                            100) != HAL_OK)
+  {
+    UART_Print("VL53L0X not found at 0x29.\r\n");
+    return VL53L0X_ERROR_CONTROL_INTERFACE;
+  }
+
+  memset(&tof_device, 0, sizeof(tof_device));
+  tof_device.I2cDevAddr = VL53L0X_ADDRESS_HAL;
+
+  status = VL53L0X_DataInit(&tof_device);
+  TOF_PrintApiResult("VL53L0X_DataInit", status);
+  if (status != VL53L0X_ERROR_NONE) return status;
+
+  status = VL53L0X_StaticInit(&tof_device);
+  TOF_PrintApiResult("VL53L0X_StaticInit", status);
+  if (status != VL53L0X_ERROR_NONE) return status;
+
+  status = VL53L0X_PerformRefSpadManagement(&tof_device,
+                                             &tof_ref_spad_count,
+                                             &tof_is_aperture_spads);
+  TOF_PrintApiResult("VL53L0X_RefSpad", status);
+  if (status != VL53L0X_ERROR_NONE) return status;
+
+  status = VL53L0X_PerformRefCalibration(&tof_device,
+                                          &tof_vhv_settings,
+                                          &tof_phase_cal);
+  TOF_PrintApiResult("VL53L0X_RefCalibration", status);
+  if (status != VL53L0X_ERROR_NONE) return status;
+
+  status = VL53L0X_SetDeviceMode(&tof_device,
+                                  VL53L0X_DEVICEMODE_SINGLE_RANGING);
+  TOF_PrintApiResult("VL53L0X_SetDeviceMode", status);
+  if (status != VL53L0X_ERROR_NONE) return status;
+
+  status = VL53L0X_SetLimitCheckValue(
+      &tof_device,
+      VL53L0X_CHECKENABLE_SIGNAL_RATE_FINAL_RANGE,
+      (FixPoint1616_t)16384U);       /* 0.25 MCps */
+  TOF_PrintApiResult("VL53L0X_SetSignalLimit", status);
+  if (status != VL53L0X_ERROR_NONE) return status;
+
+  status = VL53L0X_SetLimitCheckValue(
+      &tof_device,
+      VL53L0X_CHECKENABLE_SIGMA_FINAL_RANGE,
+      (FixPoint1616_t)1179648U);     /* 18 mm */
+  TOF_PrintApiResult("VL53L0X_SetSigmaLimit", status);
+  if (status != VL53L0X_ERROR_NONE) return status;
+
+  status = VL53L0X_SetMeasurementTimingBudgetMicroSeconds(&tof_device,
+                                                           200000U);
+  TOF_PrintApiResult("VL53L0X_SetTimingBudget", status);
+  return status;
+}
+
+uint8_t TOF_Read(void)
+{
+  if (tof_initialized == 0U)
+  {
+    tof_distance_mm = 0U;
+    tof_range_status = 255U;
+    return 0U;
+  }
+
+  tof_status = VL53L0X_PerformSingleRangingMeasurement(&tof_device,
+                                                        &tof_measurement);
+  if (tof_status != VL53L0X_ERROR_NONE)
+  {
+    tof_distance_mm = 0U;
+    tof_range_status = 255U;
+    return 0U;
+  }
+
+  tof_distance_mm = tof_measurement.RangeMilliMeter;
+  tof_range_status = tof_measurement.RangeStatus;
+  return (tof_range_status == 0U) ? 1U : 0U;
+}
+
+const char *Label_Name(OccupancyLabel_t label)
+{
+  switch (label)
+  {
+    case LABEL_EMPTY: return "EMPTY";
+    case LABEL_LOW:   return "LOW";
+    case LABEL_HIGH:  return "HIGH";
+    default:          return "UNKNOWN";
+  }
+}
+
+void Outputs_SetForLabel(OccupancyLabel_t label)
+{
+  switch (label)
+  {
+    case LABEL_EMPTY:
+      HAL_GPIO_WritePin(LED_Green_GPIO_Port, LED_Green_Pin, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(LED_Red_GPIO_Port, LED_Red_Pin, GPIO_PIN_RESET);
+      break;
+
+    case LABEL_LOW:
+      HAL_GPIO_WritePin(LED_Green_GPIO_Port, LED_Green_Pin, GPIO_PIN_SET);
+      HAL_GPIO_WritePin(LED_Red_GPIO_Port, LED_Red_Pin, GPIO_PIN_SET);
+      break;
+
+    case LABEL_HIGH:
+      HAL_GPIO_WritePin(LED_Green_GPIO_Port, LED_Green_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(LED_Red_GPIO_Port, LED_Red_Pin, GPIO_PIN_SET);
+      break;
+
+    default:
+      HAL_GPIO_WritePin(LED_Green_GPIO_Port, LED_Green_Pin, GPIO_PIN_RESET);
+      HAL_GPIO_WritePin(LED_Red_GPIO_Port, LED_Red_Pin, GPIO_PIN_RESET);
+      break;
+  }
+}
+
+void Buzzer_Start(uint32_t duration_ms)
+{
+  HAL_GPIO_WritePin(Buzzer_GPIO_Port, Buzzer_Pin, BUZZER_ACTIVE_LEVEL);
+  buzzer_is_on = 1U;
+  buzzer_stop_time_ms = HAL_GetTick() + duration_ms;
+}
+
+void Buzzer_Update(void)
+{
+  if ((buzzer_is_on != 0U) &&
+      ((int32_t)(HAL_GetTick() - buzzer_stop_time_ms) >= 0))
+  {
+    HAL_GPIO_WritePin(Buzzer_GPIO_Port, Buzzer_Pin, BUZZER_INACTIVE_LEVEL);
+    buzzer_is_on = 0U;
+  }
+}
+
+void Buttons_Init(void)
+{
+  button1.raw_state = HAL_GPIO_ReadPin(Push_button_1_GPIO_Port,
+                                       Push_button_1_Pin);
+  button1.stable_state = button1.raw_state;
+  button1.change_time_ms = HAL_GetTick();
+
+  button2.raw_state = HAL_GPIO_ReadPin(Push_button_2_GPIO_Port,
+                                       Push_button_2_Pin);
+  button2.stable_state = button2.raw_state;
+  button2.change_time_ms = HAL_GetTick();
+}
+
+uint8_t Button_Pressed(ButtonDebounce_t *button,
+                       GPIO_TypeDef *port,
+                       uint16_t pin)
+{
+  GPIO_PinState new_raw_state = HAL_GPIO_ReadPin(port, pin);
+
+  if (new_raw_state != button->raw_state)
+  {
+    button->raw_state = new_raw_state;
+    button->change_time_ms = HAL_GetTick();
+  }
+
+  if (((HAL_GetTick() - button->change_time_ms) >= BUTTON_DEBOUNCE_MS) &&
+      (button->stable_state != button->raw_state))
+  {
+    button->stable_state = button->raw_state;
+
+    /* Buttons use internal pull-up, so pressed state is GPIO_PIN_RESET. */
+    if (button->stable_state == GPIO_PIN_RESET)
+    {
+      return 1U;
+    }
+  }
+
+  return 0U;
+}
+
+void Buttons_Update(void)
+{
+  if (Button_Pressed(&button1,
+                     Push_button_1_GPIO_Port,
+                     Push_button_1_Pin) != 0U)
+  {
+    selected_label = (OccupancyLabel_t)(((uint8_t)selected_label + 1U) % 3U);
+    Outputs_SetForLabel(selected_label);
+    Buzzer_Start((selected_label == LABEL_HIGH) ? 180U : BUZZER_BEEP_MS);
+
+    snprintf(uart_string,
+             sizeof(uart_string),
+             "Selected label: %s\r\n",
+             Label_Name(selected_label));
+    UART_Print(uart_string);
+  }
+
+  if (Button_Pressed(&button2,
+                     Push_button_2_GPIO_Port,
+                     Push_button_2_Pin) != 0U)
+  {
+    logging_enabled = (logging_enabled == 0U) ? 1U : 0U;
+    HAL_GPIO_WritePin(LD2_GPIO_Port,
+                      LD2_Pin,
+                      (logging_enabled != 0U) ? GPIO_PIN_SET : GPIO_PIN_RESET);
+    Buzzer_Start(BUZZER_BEEP_MS);
+
+    if (logging_enabled != 0U)
+    {
+      session_number++;
+      UART_Print("LOGGING STARTED\r\n");
+      UART_Print("time_ms,session_id,pir_1,pir_2,tof_mm,tof_status,temperature_c,humidity_percent,pressure_hpa,occupancy_label\r\n");
+    }
+    else
+    {
+      UART_Print("LOGGING STOPPED\r\n");
+    }
+  }
+}
+
+void OLED_WriteLine(uint8_t y, const char *text)
+{
+  char padded[19];
+  snprintf(padded, sizeof(padded), "%-18.18s", text);
+  SSD1306_GotoXY(0, y);
+  SSD1306_Puts(padded, &Font_7x10, 1);
+}
+
+void Display_Update(void)
+{
+  if (bme_initialized != 0U)
+  {
+    snprintf(display_string,
+             sizeof(display_string),
+             "T:%4.1fC H:%4.1f",
+             temperature_c,
+             humidity_percent);
+  }
+  else
+  {
+    snprintf(display_string, sizeof(display_string), "BME280: ERROR");
+  }
+  OLED_WriteLine(0U, display_string);
+
+  snprintf(display_string,
+           sizeof(display_string),
+           "P:%6.1f hPa",
+           pressure_hpa);
+  OLED_WriteLine(11U, display_string);
+
+  if (tof_range_status == 0U)
+  {
+    snprintf(display_string,
+             sizeof(display_string),
+             "ToF:%4u mm OK",
+             (unsigned int)tof_distance_mm);
+  }
+  else
+  {
+    snprintf(display_string,
+             sizeof(display_string),
+             "ToF:invalid S:%u",
+             (unsigned int)tof_range_status);
+  }
+  OLED_WriteLine(22U, display_string);
+
+  snprintf(display_string,
+           sizeof(display_string),
+           "PIR1:%u PIR2:%u",
+           (pir1_state == GPIO_PIN_SET) ? 1U : 0U,
+           (pir2_state == GPIO_PIN_SET) ? 1U : 0U);
+  OLED_WriteLine(33U, display_string);
+
+  snprintf(display_string,
+           sizeof(display_string),
+           "Label:%s",
+           Label_Name(selected_label));
+  OLED_WriteLine(44U, display_string);
+
+  snprintf(display_string,
+           sizeof(display_string),
+           "Log:%s S:%lu",
+           (logging_enabled != 0U) ? "ON" : "OFF",
+           (unsigned long)session_number);
+  OLED_WriteLine(54U, display_string);
+
+  SSD1306_UpdateScreen();
+}
+
+void Sample_AllSensors(void)
+{
+  pir1_state = HAL_GPIO_ReadPin(PIR_1_GPIO_Port, PIR_1_Pin);
+  pir2_state = HAL_GPIO_ReadPin(PIR_2_GPIO_Port, PIR_2_Pin);
+
+  if (BME_Read() == 0U)
+  {
+    UART_Print("BME280 read failed.\r\n");
+  }
+
+  if ((TOF_Read() == 0U) && (tof_initialized != 0U))
+  {
+    snprintf(uart_string,
+             sizeof(uart_string),
+             "VL53L0X invalid measurement: range status=%u\r\n",
+             (unsigned int)tof_range_status);
+    UART_Print(uart_string);
+  }
+}
+
+void UART_OutputSample(void)
+{
+  unsigned int pir1_value = (pir1_state == GPIO_PIN_SET) ? 1U : 0U;
+  unsigned int pir2_value = (pir2_state == GPIO_PIN_SET) ? 1U : 0U;
+
+  if (logging_enabled != 0U)
+  {
+    snprintf(uart_string,
+             sizeof(uart_string),
+             "%lu,SESSION_%lu,%u,%u,%u,%u,%.2f,%.2f,%.2f,%s\r\n",
+             (unsigned long)HAL_GetTick(),
+             (unsigned long)session_number,
+             pir1_value,
+             pir2_value,
+             (unsigned int)tof_distance_mm,
+             (unsigned int)tof_range_status,
+             temperature_c,
+             humidity_percent,
+             pressure_hpa,
+             Label_Name(selected_label));
+  }
+  else
+  {
+    snprintf(uart_string,
+             sizeof(uart_string),
+             "PIR=%u/%u ToF=%u(S%u) T=%.2fC H=%.2f%% P=%.2fhPa Label=%s Log=OFF\r\n",
+             pir1_value,
+             pir2_value,
+             (unsigned int)tof_distance_mm,
+             (unsigned int)tof_range_status,
+             temperature_c,
+             humidity_percent,
+             pressure_hpa,
+             Label_Name(selected_label));
+  }
+
+  UART_Print(uart_string);
+}
+/* USER CODE END 0 */
+
+/**
+  * @brief  The application entry point.
+  * @retval int
+  */
+int main(void)
+{
+  HAL_Init();
+  SystemClock_Config();
+
+  MX_GPIO_Init();
+  MX_USART2_UART_Init();
+  MX_I2C1_Init();
+
+  /* USER CODE BEGIN 2 */
+  HAL_GPIO_WritePin(Buzzer_GPIO_Port, Buzzer_Pin, BUZZER_INACTIVE_LEVEL);
+  HAL_GPIO_WritePin(LD2_GPIO_Port, LD2_Pin, GPIO_PIN_RESET);
+  Outputs_SetForLabel(selected_label);
+  Buttons_Init();
+
+  UART_Print("\r\n=== COMPLETE HARDWARE TEST - NO BH1750 ===\r\n");
+  UART_Print("Button 1: select EMPTY/LOW/HIGH\r\n");
+  UART_Print("Button 2: start/stop CSV logging\r\n");
+
+  I2C_Scan();
+
+  SSD1306_Init();
+  OLED_WriteLine(0U, "System starting");
+  OLED_WriteLine(22U, "No BH1750 yet");
+  SSD1306_UpdateScreen();
+
+  bme_initialized = BME_Init();
+  tof_status = TOF_Init();
+  tof_initialized = (tof_status == VL53L0X_ERROR_NONE) ? 1U : 0U;
+
+  if (tof_initialized != 0U)
+  {
+    UART_Print("VL53L0X initialization OK.\r\n");
+  }
+  else
+  {
+    snprintf(uart_string,
+             sizeof(uart_string),
+             "VL53L0X initialization failed: %d\r\n",
+             (int)tof_status);
+    UART_Print(uart_string);
+  }
+
+  Buzzer_Start(120U);
+  last_sample_time_ms = HAL_GetTick() - SAMPLE_INTERVAL_MS;
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
+  while (1)
+  {
+    Buttons_Update();
+    Buzzer_Update();
+
+    if ((HAL_GetTick() - last_sample_time_ms) >= SAMPLE_INTERVAL_MS)
+    {
+      last_sample_time_ms = HAL_GetTick();
+      Sample_AllSensors();
+      Display_Update();
+      UART_OutputSample();
+    }
+
+    HAL_Delay(5U);
+    /* USER CODE END WHILE */
+  }
+  /* USER CODE BEGIN 3 */
+  /* USER CODE END 3 */
+}
+
+/**
+  * @brief System Clock Configuration
+  * @retval None
+  */
+void SystemClock_Config(void)
+{
+  RCC_OscInitTypeDef RCC_OscInitStruct = {0};
+  RCC_ClkInitTypeDef RCC_ClkInitStruct = {0};
+
+  if (HAL_PWREx_ControlVoltageScaling(PWR_REGULATOR_VOLTAGE_SCALE1) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  RCC_OscInitStruct.OscillatorType = RCC_OSCILLATORTYPE_HSI;
+  RCC_OscInitStruct.HSIState = RCC_HSI_ON;
+  RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
+  RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
+  RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
+  RCC_OscInitStruct.PLL.PLLM = 1;
+  RCC_OscInitStruct.PLL.PLLN = 10;
+  RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV7;
+  RCC_OscInitStruct.PLL.PLLQ = RCC_PLLQ_DIV2;
+  RCC_OscInitStruct.PLL.PLLR = RCC_PLLR_DIV2;
+
+  if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
+  {
+    Error_Handler();
+  }
+
+  RCC_ClkInitStruct.ClockType = RCC_CLOCKTYPE_HCLK |
+                                RCC_CLOCKTYPE_SYSCLK |
+                                RCC_CLOCKTYPE_PCLK1 |
+                                RCC_CLOCKTYPE_PCLK2;
+  RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
+  RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
+
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_4) != HAL_OK)
+  {
+    Error_Handler();
+  }
+}
+
+void Error_Handler(void)
+{
+  __disable_irq();
+  while (1)
+  {
+  }
+}
+
+#ifdef USE_FULL_ASSERT
+void assert_failed(uint8_t *file, uint32_t line)
+{
+  (void)file;
+  (void)line;
+}
+#endif /* USE_FULL_ASSERT */
+

@@ -1,0 +1,10 @@
+split,occupancy_label,windows,recordings
+test,EMPTY,102,1
+test,HIGH,97,1
+test,LOW,57,1
+train,EMPTY,144,2
+train,HIGH,231,2
+train,LOW,284,3
+validation,EMPTY,69,1
+validation,HIGH,127,1
+validation,LOW,110,1
