@@ -26,7 +26,6 @@ The final INT8 TensorFlow Lite model achieved **88.67% test accuracy** and **87.
 | `documentation` | Internship documentation, logbooks, project reference material, and presentation assets. |
 | `deliverables/final_presentation` | Final presentation PDF, editable PowerPoint source, and the printable ten-minute presentation script. |
 
-The earlier Arabic project guides remain available as `README_AR.md` files in the relevant folders.
 
 ## System overview
 
